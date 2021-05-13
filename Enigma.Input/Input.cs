@@ -8,54 +8,97 @@ namespace Enigma.Input
 {
     public static class Input
     {
-        public static Vector2 MouseDelta { get; }
-        public static bool MouseVisible { get; set; }
+        private static HashSet<Key> _currentlyPressedKeys = new HashSet<Key>();
+        private static HashSet<Key> _newKeysThisFrame = new HashSet<Key>();
 
-        public static event Action<KeyEvent> OnKeyDown, OnKeyUp;
-        public static event Action<MouseEvent> OnMouseDown, OnMouseUp;
-        public static event Action<MouseMoveEventArgs> OnMouseMove;
-        public static event Action<MouseWheelEventArgs> OnMouseScroll;
+        private static HashSet<MouseButton> _currentlyPressedMouseButtons = new HashSet<MouseButton>();
+        private static HashSet<MouseButton> _newMouseButtonsThisFrame = new HashSet<MouseButton>();
 
-        private static readonly List<IInputable> inputables = new ();
-        private static readonly List<InputSnapshot> snapshots = new ();
+        public static Vector2 MousePosition;
+        public static Vector2 MouseDelta;
+        public static InputSnapshot FrameSnapshot { get; private set; }
+        public static IInputable Inputable { set; get; }
 
-        public static void AddInputable(IInputable inputable)
+        public static bool GetKey(Key key)
         {
-            inputables.Add(inputable);
+            return _currentlyPressedKeys.Contains(key);
         }
 
-        public static void Update()
+        public static bool GetKeyDown(Key key)
         {
-            snapshots.Clear();
-
-            foreach (IInputable i in inputables)
-            {
-                snapshots.Add(i.Snapshot);
-            }
+            return _newKeysThisFrame.Contains(key);
         }
 
-        public static bool IsKeyDown(Key key)
+        public static bool GetMouseButton(MouseButton button)
         {
-            foreach (InputSnapshot s in snapshots)
+            return _currentlyPressedMouseButtons.Contains(button);
+        }
+
+        public static bool GetMouseButtonDown(MouseButton button)
+        {
+            return _newMouseButtonsThisFrame.Contains(button);
+        }
+
+        public static void UpdateFrameInput(InputSnapshot snapshot)
+        {
+            FrameSnapshot = snapshot;
+            _newKeysThisFrame.Clear();
+            _newMouseButtonsThisFrame.Clear();
+
+            MousePosition = snapshot.MousePosition;
+            MouseDelta = Inputable.MouseDelta;
+            for (int i = 0; i < snapshot.KeyEvents.Count; i++)
             {
-                foreach (KeyEvent e in s.KeyEvents)
+                KeyEvent ke = snapshot.KeyEvents[i];
+                if (ke.Down)
                 {
-                    if (e.Key == key)
-                        return e.Down;
+                    KeyDown(ke.Key);
+                }
+                else
+                {
+                    KeyUp(ke.Key);
                 }
             }
-            return false;
+            for (int i = 0; i < snapshot.MouseEvents.Count; i++)
+            {
+                MouseEvent me = snapshot.MouseEvents[i];
+                if (me.Down)
+                {
+                    MouseDown(me.MouseButton);
+                }
+                else
+                {
+                    MouseUp(me.MouseButton);
+                }
+            }
         }
 
-        public static void SetMousePosition(Vector2 position)
+        private static void MouseUp(MouseButton mouseButton)
         {
-            foreach (IInputable i in inputables)
-                i.SetMousePosition(position);
+            _currentlyPressedMouseButtons.Remove(mouseButton);
+            _newMouseButtonsThisFrame.Remove(mouseButton);
         }
 
-        public static void SetMousePosition(int x, int y)
+        private static void MouseDown(MouseButton mouseButton)
         {
-            SetMousePosition(new Vector2(x, y));
+            if (_currentlyPressedMouseButtons.Add(mouseButton))
+            {
+                _newMouseButtonsThisFrame.Add(mouseButton);
+            }
+        }
+
+        private static void KeyUp(Key key)
+        {
+            _currentlyPressedKeys.Remove(key);
+            _newKeysThisFrame.Remove(key);
+        }
+
+        private static void KeyDown(Key key)
+        {
+            if (_currentlyPressedKeys.Add(key))
+            {
+                _newKeysThisFrame.Add(key);
+            }
         }
     }
 }
